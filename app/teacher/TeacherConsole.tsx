@@ -168,7 +168,31 @@ function QuestionDetail({
 
   useEffect(() => {
     loadSubmissions();
+    loadExistingAnalysis();
   }, []);
+
+  async function loadExistingAnalysis() {
+    try {
+      const res = await fetch(`/api/questions/${question.id}/analysis`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const analysis = data.analysis;
+      if (!analysis) return;
+
+      if (analysis.status === "done" && analysis.result) {
+        setAnalyzeResult(analysis.result);
+        setAnalyzeStatus("done");
+      } else if (analysis.status === "pending" || analysis.status === "processing") {
+        // 上次分析任务还在队列中，继续轮询
+        setAnalyzeStatus("polling");
+      } else if (analysis.status === "error") {
+        setAnalyzeError(analysis.error_msg ?? "AI 分析失败");
+        setAnalyzeStatus("error");
+      }
+    } catch {
+      // 静默失败，不影响页面加载
+    }
+  }
 
   async function loadSubmissions() {
     setLoadingSubmissions(true);
