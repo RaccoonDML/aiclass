@@ -644,21 +644,24 @@ export default function TeacherConsole({ initialQuestions }: { initialQuestions:
             className="text-sm font-bold mb-4"
             style={{ color: "var(--color-text-secondary)" }}
           >
-            所有问题（共 {questions.length} 个）
+            {(() => {
+              const closedCount = questions.filter((q) => q.status === "closed").length;
+              return `已结束的问题（共 ${closedCount} 个）`;
+            })()}
           </h2>
 
-          {questions.length === 0 ? (
+          {questions.filter((q) => q.status === "closed").length === 0 ? (
             <div
               className="text-center py-12 rounded-2xl border-2 border-dashed"
               style={{ borderColor: "var(--color-border)" }}
             >
               <p className="text-base" style={{ color: "var(--color-text-muted)" }}>
-                还没有发布过问题
+                还没有已结束的问题
               </p>
             </div>
           ) : (
             <div className="space-y-3">
-              {questions.map((q) => (
+              {questions.filter((q) => q.status === "closed").map((q) => (
                 <div
                   key={q.id}
                   onClick={() => setSelectedQuestion(q)}

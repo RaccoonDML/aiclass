@@ -123,10 +123,17 @@ export default function StudentBoard({ initialQuestions }: { initialQuestions: Q
               课堂问答公示板
             </p>
           </div>
-          <div className="text-right">
-            <p className="text-xs" style={{ color: "var(--color-text-muted)" }}>
-              自动刷新中
-            </p>
+          <div className="flex flex-col items-end gap-1.5">
+            <Link
+              href="/teacher"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all duration-200 hover:opacity-80 active:scale-95"
+              style={{ background: "var(--color-teacher)" }}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+              教师入口
+            </Link>
             <p className="text-xs" style={{ color: "var(--color-text-muted)" }} suppressHydrationWarning>
               {lastUpdated.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
             </p>
