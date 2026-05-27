@@ -160,7 +160,8 @@ function QuestionDetail({
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loadingSubmissions, setLoadingSubmissions] = useState(true);
   const [closeStatus, setCloseStatus] = useState<"idle" | "loading" | "done">("idle");
-  const [analyzeStatus, setAnalyzeStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
+  // submitting: 正在提交任务到 DB；polling: 等待 Worker 处理；done/error: 完成
+  const [analyzeStatus, setAnalyzeStatus] = useState<"idle" | "submitting" | "polling" | "done" | "error">("idle");
   const [analyzeResult, setAnalyzeResult] = useState<string>("");
   const [analyzeError, setAnalyzeError] = useState<string>("");
   const [currentStatus, setCurrentStatus] = useState(question.status);
@@ -189,6 +190,36 @@ function QuestionDetail({
     return () => clearInterval(timer);
   }, [currentStatus, question.id]);
 
+  // 轮询 AI 分析结果（polling 状态时每 3 秒查询一次）
+  useEffect(() => {
+    if (analyzeStatus !== "polling") return;
+
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/questions/${question.id}/analysis`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const analysis = data.analysis;
+        if (!analysis) return;
+
+        if (analysis.status === "done") {
+          setAnalyzeResult(analysis.result ?? "");
+          setAnalyzeStatus("done");
+        } else if (analysis.status === "error") {
+          setAnalyzeError(analysis.error_msg ?? "AI 分析失败");
+          setAnalyzeStatus("error");
+        }
+        // pending / processing 继续等待
+      } catch {
+        // 网络抖动时静默忽略，继续轮询
+      }
+    };
+
+    poll(); // 立即查一次
+    const timer = setInterval(poll, 3000);
+    return () => clearInterval(timer);
+  }, [analyzeStatus, question.id]);
+
   async function handleClose() {
     if (closeStatus === "loading") return;
     if (!confirm("确认结束该问题？结束后学生将无法继续提交回答。")) return;
@@ -208,8 +239,8 @@ function QuestionDetail({
   }
 
   async function handleAnalyze() {
-    if (analyzeStatus === "loading") return;
-    setAnalyzeStatus("loading");
+    if (analyzeStatus === "submitting" || analyzeStatus === "polling") return;
+    setAnalyzeStatus("submitting");
     setAnalyzeResult("");
     setAnalyzeError("");
 
@@ -218,15 +249,15 @@ function QuestionDetail({
       const data = await res.json();
 
       if (!res.ok) {
-        setAnalyzeError(data.error ?? "AI 分析失败");
+        setAnalyzeError(data.error ?? "提交分析任务失败");
         setAnalyzeStatus("error");
         return;
       }
 
-      setAnalyzeResult(typeof data.result === "string" ? data.result : JSON.stringify(data.result, null, 2));
-      setAnalyzeStatus("done");
+      // 任务已写入 DB，切换到轮询状态
+      setAnalyzeStatus("polling");
     } catch {
-      setAnalyzeError("网络错误，无法连接 AI 服务");
+      setAnalyzeError("网络错误，无法提交分析任务");
       setAnalyzeStatus("error");
     }
   }
@@ -326,23 +357,55 @@ function QuestionDetail({
             )}
             <button
               onClick={handleAnalyze}
-              disabled={analyzeStatus === "loading"}
-              className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-200 disabled:opacity-50"
+              disabled={analyzeStatus === "submitting" || analyzeStatus === "polling"}
+              className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-200 disabled:opacity-60"
               style={{ background: "var(--color-teacher-accent)" }}
             >
-              {analyzeStatus === "loading" ? (
+              {analyzeStatus === "submitting" ? (
                 <span className="flex items-center justify-center gap-2">
                   <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  分析中…
+                  提交中…
+                </span>
+              ) : analyzeStatus === "polling" ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  AI 分析中…
                 </span>
               ) : (
                 "✨ AI 分析"
               )}
             </button>
           </div>
+
+          {/* AI 分析状态提示 */}
+          {analyzeStatus === "polling" && (
+            <div
+              className="flex items-center gap-3 p-4 rounded-xl border-2 animate-fade-in"
+              style={{
+                borderColor: "rgba(200,151,42,0.25)",
+                background: "rgba(200,151,42,0.04)",
+              }}
+            >
+              <svg className="w-5 h-5 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24" style={{ color: "var(--color-teacher-accent)" }}>
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              <div>
+                <p className="text-sm font-semibold" style={{ color: "var(--color-teacher-accent)" }}>
+                  分析任务已提交，等待 Worker 处理…
+                </p>
+                <p className="text-xs mt-0.5" style={{ color: "var(--color-text-muted)" }}>
+                  每 3 秒自动刷新，请稍候
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* AI 分析结果 */}
           {analyzeStatus === "done" && analyzeResult && (
@@ -353,9 +416,18 @@ function QuestionDetail({
                 background: "rgba(200,151,42,0.05)",
               }}
             >
-              <h3 className="text-sm font-bold mb-2" style={{ color: "var(--color-teacher-accent)" }}>
-                AI 分析结果
-              </h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-bold" style={{ color: "var(--color-teacher-accent)" }}>
+                  ✨ AI 分析结果
+                </h3>
+                <button
+                  onClick={() => { setAnalyzeResult(""); setAnalyzeStatus("idle"); }}
+                  className="text-xs transition-opacity hover:opacity-60"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
+                  重新分析
+                </button>
+              </div>
               <pre className="text-sm whitespace-pre-wrap leading-relaxed" style={{ color: "var(--color-text-primary)", fontFamily: "var(--font-body)" }}>
                 {analyzeResult}
               </pre>
@@ -364,7 +436,15 @@ function QuestionDetail({
 
           {analyzeStatus === "error" && (
             <div className="rounded-xl border-2 border-red-200 bg-red-50 p-4 animate-fade-in">
-              <p className="text-sm font-medium text-red-700">{analyzeError}</p>
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-red-700">{analyzeError}</p>
+                <button
+                  onClick={() => setAnalyzeStatus("idle")}
+                  className="text-xs text-red-500 hover:opacity-70 transition-opacity ml-4 flex-shrink-0"
+                >
+                  重试
+                </button>
+              </div>
             </div>
           )}
 

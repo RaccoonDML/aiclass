@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { isTeacherAuthenticated } from "@/lib/auth";
 
-export async function POST(
+export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -13,27 +13,22 @@ export async function POST(
 
   const { id } = await params;
 
-  // 验证问题存在
-  const { data: question, error: questionError } = await supabase
-    .from("questions")
-    .select("id")
-    .eq("id", id)
-    .single();
-
-  if (questionError || !question) {
-    return NextResponse.json({ error: "问题不存在" }, { status: 404 });
-  }
-
-  // 写入分析任务，立即返回（由 Python Worker 异步处理）
+  // 返回该问题最新一条分析记录
   const { data, error } = await supabase
     .from("analyses")
-    .insert({ question_id: id, status: "pending" })
-    .select("id, status, created_at")
-    .single();
+    .select("id, status, result, error_msg, created_at, completed_at")
+    .eq("question_id", id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ analysis: data }, { status: 201 });
+  if (!data) {
+    return NextResponse.json({ analysis: null });
+  }
+
+  return NextResponse.json({ analysis: data });
 }
