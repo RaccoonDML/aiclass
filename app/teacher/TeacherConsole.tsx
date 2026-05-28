@@ -152,19 +152,30 @@ function QuestionDetail({
   question,
   onClose,
   onClosed,
+  onDeleted,
+  onReactivated,
 }: {
   question: Question;
   onClose: () => void;
   onClosed: (q: Question) => void;
+  onDeleted: (id: string) => void;
+  onReactivated: (q: Question) => void;
+  onEdited: (q: Question) => void;
 }) {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loadingSubmissions, setLoadingSubmissions] = useState(true);
   const [closeStatus, setCloseStatus] = useState<"idle" | "loading" | "done">("idle");
+  const [deleteStatus, setDeleteStatus] = useState<"idle" | "loading">("idle");
+  const [reactivateStatus, setReactivateStatus] = useState<"idle" | "loading">("idle");
+  const [editMode, setEditMode] = useState(false);
+  const [editContent, setEditContent] = useState(question.content);
+  const [editSaving, setEditSaving] = useState(false);
   // submitting: 正在提交任务到 DB；polling: 等待 Worker 处理；done/error: 完成
   const [analyzeStatus, setAnalyzeStatus] = useState<"idle" | "submitting" | "polling" | "done" | "error">("idle");
   const [analyzeResult, setAnalyzeResult] = useState<string>("");
   const [analyzeError, setAnalyzeError] = useState<string>("");
   const [currentStatus, setCurrentStatus] = useState(question.status);
+  const [currentContent, setCurrentContent] = useState(question.content);
 
   useEffect(() => {
     loadSubmissions();
@@ -286,6 +297,73 @@ function QuestionDetail({
     }
   }
 
+  async function handleDelete() {
+    if (deleteStatus === "loading") return;
+    if (!confirm("确认删除该问题？将同时删除所有回答和分析记录，且无法恢复。")) return;
+
+    setDeleteStatus("loading");
+    try {
+      const res = await fetch(`/api/questions/${question.id}`, { method: "DELETE" });
+      if (res.ok) {
+        onDeleted(question.id);
+        onClose();
+      } else {
+        const data = await res.json();
+        alert(data.error ?? "删除失败");
+        setDeleteStatus("idle");
+      }
+    } catch {
+      alert("网络错误，请重试");
+      setDeleteStatus("idle");
+    }
+  }
+
+  async function handleReactivate() {
+    if (reactivateStatus === "loading") return;
+    if (!confirm("重新激活该问题？当前正在进行的问题（如有）将自动关闭，学生可以继续提交回答。")) return;
+
+    setReactivateStatus("loading");
+    try {
+      const res = await fetch(`/api/questions/${question.id}/reactivate`, { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        setCurrentStatus("active");
+        setReactivateStatus("idle");
+        onReactivated(data.question);
+      } else {
+        alert(data.error ?? "重新激活失败");
+        setReactivateStatus("idle");
+      }
+    } catch {
+      alert("网络错误，请重试");
+      setReactivateStatus("idle");
+    }
+  }
+
+  async function handleEditSave() {
+    if (editSaving || !editContent.trim()) return;
+    setEditSaving(true);
+    try {
+      const res = await fetch(`/api/questions/${question.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: editContent.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCurrentContent(data.question.content);
+        setEditMode(false);
+        onEdited(data.question);
+      } else {
+        alert(data.error ?? "保存失败");
+      }
+    } catch {
+      alert("网络错误，请重试");
+    } finally {
+      setEditSaving(false);
+    }
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex"
@@ -342,14 +420,60 @@ function QuestionDetail({
                   已结束
                 </span>
               )}
+              {currentStatus === "active" && !editMode && (
+                <button
+                  onClick={() => { setEditContent(currentContent); setEditMode(true); }}
+                  className="ml-auto text-xs font-medium px-2 py-1 rounded-lg hover:bg-green-100 transition-colors"
+                  style={{ color: "var(--color-active)" }}
+                >
+                  编辑题目
+                </button>
+              )}
             </div>
-            <p
-              className="text-lg font-semibold leading-relaxed text-gray-900 mb-3"
-              style={{ fontFamily: "var(--font-display)" }}
-            >
-              {question.content}
-            </p>
-            <div className="grid grid-cols-2 gap-2 text-xs" style={{ color: "var(--color-text-muted)" }}>
+
+            {editMode ? (
+              <div className="space-y-2">
+                <textarea
+                  value={editContent}
+                  onChange={(e) => setEditContent(e.target.value)}
+                  rows={3}
+                  className="w-full rounded-lg border-2 p-3 text-base resize-none outline-none transition-all"
+                  style={{
+                    borderColor: "var(--color-active-border)",
+                    background: "white",
+                    fontFamily: "var(--font-display)",
+                    color: "var(--color-text-primary)",
+                  }}
+                  autoFocus
+                />
+                <div className="flex gap-2 justify-end">
+                  <button
+                    onClick={() => setEditMode(false)}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium border hover:bg-gray-50 transition-colors"
+                    style={{ borderColor: "var(--color-border)", color: "var(--color-text-secondary)" }}
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={handleEditSave}
+                    disabled={editSaving || !editContent.trim()}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all disabled:opacity-50"
+                    style={{ background: "var(--color-active)" }}
+                  >
+                    {editSaving ? "保存中…" : "保存"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <p
+                className="text-lg font-semibold leading-relaxed text-gray-900 mb-3"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                {currentContent}
+              </p>
+            )}
+
+            <div className="grid grid-cols-2 gap-2 text-xs mt-3" style={{ color: "var(--color-text-muted)" }}>
               <div>
                 <span className="font-medium">发布时间：</span>
                 {formatFullTime(question.published_at)}
@@ -379,6 +503,20 @@ function QuestionDetail({
                 {closeStatus === "loading" ? "结束中…" : closeStatus === "done" ? "✓ 已结束" : "结束问题"}
               </button>
             )}
+            {currentStatus === "closed" && (
+              <button
+                onClick={handleReactivate}
+                disabled={reactivateStatus === "loading"}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all duration-200 disabled:opacity-50"
+                style={{
+                  borderColor: "var(--color-active-border)",
+                  color: "var(--color-active)",
+                  background: "var(--color-active-bg)",
+                }}
+              >
+                {reactivateStatus === "loading" ? "激活中…" : "🔄 重新激活"}
+              </button>
+            )}
             <button
               onClick={handleAnalyze}
               disabled={analyzeStatus === "submitting" || analyzeStatus === "polling"}
@@ -405,6 +543,21 @@ function QuestionDetail({
                 "✨ AI 分析"
               )}
             </button>
+            {currentStatus === "closed" && (
+              <button
+                onClick={handleDelete}
+                disabled={deleteStatus === "loading"}
+                className="py-2.5 px-4 rounded-xl text-sm font-semibold border-2 transition-all duration-200 disabled:opacity-50"
+                style={{
+                  borderColor: "var(--color-danger)",
+                  color: "var(--color-danger)",
+                  background: "var(--color-danger-bg)",
+                }}
+                title="删除该问题及所有回答"
+              >
+                {deleteStatus === "loading" ? "删除中…" : "🗑 删除"}
+              </button>
+            )}
           </div>
 
           {/* AI 分析状态提示 */}
@@ -583,6 +736,22 @@ export default function TeacherConsole({ initialQuestions }: { initialQuestions:
     );
   }
 
+  function handleDeleted(deletedId: string) {
+    setQuestions((prev) => prev.filter((q) => q.id !== deletedId));
+    setSelectedQuestion(null);
+  }
+
+  function handleReactivated(updatedQuestion: Question) {
+    setQuestions((prev) =>
+      prev.map((q) => {
+        if (q.id === updatedQuestion.id) return updatedQuestion;
+        if (q.status === "active") return { ...q, status: "closed" as const, closed_at: new Date().toISOString() };
+        return q;
+      })
+    );
+    setSelectedQuestion(updatedQuestion);
+  }
+
   async function handleLogout() {
     setLoggingOut(true);
     try {
@@ -746,6 +915,12 @@ export default function TeacherConsole({ initialQuestions }: { initialQuestions:
           onClose={() => setSelectedQuestion(null)}
           onClosed={(updated) => {
             handleClosed(updated);
+            setSelectedQuestion(updated);
+          }}
+          onDeleted={handleDeleted}
+          onReactivated={handleReactivated}
+          onEdited={(updated) => {
+            setQuestions((prev) => prev.map((q) => q.id === updated.id ? updated : q));
             setSelectedQuestion(updated);
           }}
         />
