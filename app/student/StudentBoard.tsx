@@ -96,6 +96,7 @@ export default function StudentBoard({ initialQuestions }: { initialQuestions: Q
       }
     };
 
+    refresh(); // 立即刷新一次，不等 5 秒
     const timer = setInterval(refresh, 5000);
     return () => clearInterval(timer);
   }, []);

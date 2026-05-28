@@ -1,6 +1,8 @@
 import { supabase, type Question } from "@/lib/supabase";
 import StudentBoard from "./StudentBoard";
 
+export const dynamic = "force-dynamic";
+
 async function getRecentQuestions(): Promise<Question[]> {
   const { data, error } = await supabase
     .from("questions")

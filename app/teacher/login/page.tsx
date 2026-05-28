@@ -1,10 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 
 export default function TeacherLoginPage() {
-  const router = useRouter();
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
@@ -31,8 +29,7 @@ export default function TeacherLoginPage() {
         return;
       }
 
-      router.push("/teacher");
-      router.refresh();
+      window.location.href = "/teacher";
     } catch {
       setErrorMsg("网络错误，请重试");
       setStatus("error");
