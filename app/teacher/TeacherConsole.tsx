@@ -154,6 +154,7 @@ function QuestionDetail({
   onClosed,
   onDeleted,
   onReactivated,
+  onEdited,
 }: {
   question: Question;
   onClose: () => void;
