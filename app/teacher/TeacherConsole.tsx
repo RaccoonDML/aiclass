@@ -806,7 +806,7 @@ function QuestionDetail({
               </span>
               {currentStatus === "active" && (
                 <button
-                  onClick={loadSubmissions}
+                  onClick={() => loadSubmissions()}
                   className="ml-auto text-xs font-medium transition-colors hover:opacity-70"
                   style={{ color: "var(--color-text-muted)" }}
                 >
