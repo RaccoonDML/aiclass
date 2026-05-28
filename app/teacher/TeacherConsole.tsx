@@ -2,7 +2,86 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { QRCodeSVG } from "qrcode.react";
 import { type Question, type Submission } from "@/lib/supabase";
+
+// ─── 分享弹窗 ────────────────────────────────────────────────
+function ShareModal({ url, onClose }: { url: string; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // fallback: select input
+      const input = document.querySelector<HTMLInputElement>("#share-url-input");
+      input?.select();
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.45)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        className="w-full max-w-sm rounded-2xl p-6 space-y-5 shadow-2xl animate-fade-in"
+        style={{ background: "var(--color-surface)" }}
+      >
+        {/* 标题 */}
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-bold" style={{ color: "var(--color-teacher)" }}>
+            分享给学生
+          </h3>
+          <button
+            onClick={onClose}
+            className="w-7 h-7 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors"
+            style={{ color: "var(--color-text-secondary)" }}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* 二维码 */}
+        <div className="flex justify-center">
+          <div className="p-3 rounded-xl border-2" style={{ borderColor: "var(--color-border)", background: "white" }}>
+            <QRCodeSVG value={url} size={180} level="M" />
+          </div>
+        </div>
+
+        {/* 链接 + 复制 */}
+        <div
+          className="flex items-center gap-2 rounded-xl border px-3 py-2"
+          style={{ borderColor: "var(--color-border)", background: "var(--color-bg)" }}
+        >
+          <input
+            id="share-url-input"
+            readOnly
+            value={url}
+            className="flex-1 text-xs bg-transparent outline-none truncate"
+            style={{ color: "var(--color-text-secondary)" }}
+          />
+          <button
+            onClick={handleCopy}
+            className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all"
+            style={{ background: copied ? "var(--color-active)" : "var(--color-teacher-accent)" }}
+          >
+            {copied ? "✓ 已复制" : "复制"}
+          </button>
+        </div>
+
+        <p className="text-center text-xs" style={{ color: "var(--color-text-muted)" }}>
+          学生扫码或打开链接即可提交回答
+        </p>
+      </div>
+    </div>
+  );
+}
 
 function formatTime(iso: string | null) {
   if (!iso) return "—";
@@ -179,6 +258,7 @@ function QuestionDetail({
   const [showPromptEditor, setShowPromptEditor] = useState(false);
   const [currentStatus, setCurrentStatus] = useState(question.status);
   const [currentContent, setCurrentContent] = useState(question.content);
+  const [showShare, setShowShare] = useState(false);
 
   useEffect(() => {
     loadSubmissions();
@@ -372,6 +452,7 @@ function QuestionDetail({
   }
 
   return (
+    <>
     <div
       className="fixed inset-0 z-50 flex"
       style={{ background: "rgba(0,0,0,0.4)", backdropFilter: "blur(2px)" }}
@@ -552,20 +633,22 @@ function QuestionDetail({
               )}
             </div>
 
-            {/* 按钮行 */}
+            {/* 按钮行：分享 | AI分析(flex-1) | 结束问题 / 重新激活 / 删除 */}
             <div className="flex gap-2">
               {currentStatus === "active" && (
                 <button
-                  onClick={handleClose}
-                  disabled={closeStatus === "loading" || closeStatus === "done"}
-                  className="py-2.5 px-4 rounded-xl text-sm font-semibold border-2 transition-all duration-200 disabled:opacity-50 whitespace-nowrap"
+                  onClick={() => setShowShare(true)}
+                  className="flex items-center gap-1.5 py-2.5 px-4 rounded-xl text-sm font-semibold border-2 transition-all duration-200 whitespace-nowrap"
                   style={{
-                    borderColor: "var(--color-danger)",
-                    color: "var(--color-danger)",
-                    background: "var(--color-danger-bg)",
+                    borderColor: "#c8d8ec",
+                    color: "var(--color-teacher)",
+                    background: "var(--color-teacher-bg)",
                   }}
                 >
-                  {closeStatus === "loading" ? "结束中…" : closeStatus === "done" ? "✓ 已结束" : "结束问题"}
+                  <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                  </svg>
+                  分享
                 </button>
               )}
               {currentStatus === "closed" && (
@@ -608,6 +691,20 @@ function QuestionDetail({
                   "✨ AI 分析"
                 )}
               </button>
+              {currentStatus === "active" && (
+                <button
+                  onClick={handleClose}
+                  disabled={closeStatus === "loading" || closeStatus === "done"}
+                  className="py-2.5 px-4 rounded-xl text-sm font-semibold border-2 transition-all duration-200 disabled:opacity-50 whitespace-nowrap"
+                  style={{
+                    borderColor: "var(--color-danger)",
+                    color: "var(--color-danger)",
+                    background: "var(--color-danger-bg)",
+                  }}
+                >
+                  {closeStatus === "loading" ? "结束中…" : closeStatus === "done" ? "✓ 已结束" : "结束问题"}
+                </button>
+              )}
               {currentStatus === "closed" && (
                 <button
                   onClick={handleDelete}
@@ -778,6 +875,15 @@ function QuestionDetail({
         </div>
       </div>
     </div>
+
+    {/* 分享弹窗 */}
+    {showShare && (
+      <ShareModal
+        url={`${typeof window !== "undefined" ? window.location.origin : ""}/student/questions/${question.id}`}
+        onClose={() => setShowShare(false)}
+      />
+    )}
+    </>
   );
 }
 
