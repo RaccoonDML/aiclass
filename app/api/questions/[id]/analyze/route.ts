@@ -3,7 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { isTeacherAuthenticated } from "@/lib/auth";
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const authed = await isTeacherAuthenticated();
@@ -12,6 +12,17 @@ export async function POST(
   }
 
   const { id } = await params;
+
+  // 读取可选的自定义 prompt
+  let customPrompt: string | null = null;
+  try {
+    const body = await request.json();
+    if (typeof body.prompt === "string" && body.prompt.trim()) {
+      customPrompt = body.prompt.trim();
+    }
+  } catch {
+    // body 为空或非 JSON 时忽略，使用默认 prompt
+  }
 
   // 验证问题存在
   const { data: question, error: questionError } = await supabase
@@ -27,7 +38,7 @@ export async function POST(
   // 写入分析任务，立即返回（由 Python Worker 异步处理）
   const { data, error } = await supabase
     .from("analyses")
-    .insert({ question_id: id, status: "pending" })
+    .insert({ question_id: id, status: "pending", prompt: customPrompt })
     .select("id, status, created_at")
     .single();
 
