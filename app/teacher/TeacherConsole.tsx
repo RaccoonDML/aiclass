@@ -208,8 +208,8 @@ function QuestionDetail({
     }
   }
 
-  async function loadSubmissions() {
-    setLoadingSubmissions(true);
+  async function loadSubmissions(showLoading = true) {
+    if (showLoading) setLoadingSubmissions(true);
     try {
       const res = await fetch(`/api/questions/${question.id}/submissions`);
       if (res.ok) {
@@ -217,14 +217,14 @@ function QuestionDetail({
         setSubmissions(data.submissions ?? []);
       }
     } finally {
-      setLoadingSubmissions(false);
+      if (showLoading) setLoadingSubmissions(false);
     }
   }
 
-  // 轮询回答（仅 active 状态）
+  // 轮询回答（仅 active 状态，静默刷新不触发 loading 动画）
   useEffect(() => {
     if (currentStatus !== "active") return;
-    const timer = setInterval(loadSubmissions, 5000);
+    const timer = setInterval(() => loadSubmissions(false), 5000);
     return () => clearInterval(timer);
   }, [currentStatus, question.id]);
 
@@ -494,64 +494,46 @@ function QuestionDetail({
             </div>
           </div>
 
-          {/* 操作按钮 */}
-          <div className="flex gap-3">
-            {currentStatus === "active" && (
-              <button
-                onClick={handleClose}
-                disabled={closeStatus === "loading" || closeStatus === "done"}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all duration-200 disabled:opacity-50"
-                style={{
-                  borderColor: "var(--color-danger)",
-                  color: "var(--color-danger)",
-                  background: "var(--color-danger-bg)",
-                }}
-              >
-                {closeStatus === "loading" ? "结束中…" : closeStatus === "done" ? "✓ 已结束" : "结束问题"}
-              </button>
-            )}
-            {currentStatus === "closed" && (
-              <button
-                onClick={handleReactivate}
-                disabled={reactivateStatus === "loading"}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all duration-200 disabled:opacity-50"
-                style={{
-                  borderColor: "var(--color-active-border)",
-                  color: "var(--color-active)",
-                  background: "var(--color-active-bg)",
-                }}
-              >
-                {reactivateStatus === "loading" ? "激活中…" : "🔄 重新激活"}
-              </button>
-            )}
-            <div className="flex-1 flex flex-col gap-2">
-              {/* 自定义 Prompt 折叠区 */}
+          {/* 操作区 */}
+          <div className="space-y-3">
+            {/* 自定义 Prompt 折叠区 — 独占整行 */}
+            <div
+              className="rounded-xl border overflow-hidden transition-all"
+              style={{ borderColor: "var(--color-border)" }}
+            >
               <button
                 type="button"
                 onClick={() => setShowPromptEditor((v) => !v)}
-                className="flex items-center gap-1 text-xs font-medium self-start transition-opacity hover:opacity-70"
-                style={{ color: "var(--color-text-muted)" }}
+                className="w-full flex items-center justify-between px-4 py-2.5 text-xs font-medium transition-colors hover:bg-gray-50"
+                style={{ color: "var(--color-text-secondary)", background: "var(--color-surface)" }}
               >
+                <span className="flex items-center gap-1.5">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  {customPrompt.trim()
+                    ? <span style={{ color: "var(--color-teacher-accent)" }}>已设置自定义分析要求</span>
+                    : "自定义分析要求（可选）"}
+                </span>
                 <svg
-                  className={`w-3 h-3 transition-transform duration-200 ${showPromptEditor ? "rotate-90" : ""}`}
+                  className={`w-3.5 h-3.5 transition-transform duration-200 ${showPromptEditor ? "rotate-180" : ""}`}
                   fill="none" stroke="currentColor" viewBox="0 0 24 24"
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
-                {customPrompt.trim() ? "已设置自定义分析要求" : "自定义分析要求（可选）"}
               </button>
 
               {showPromptEditor && (
-                <div className="animate-fade-in">
+                <div className="px-4 pb-3 pt-2 space-y-2 animate-fade-in" style={{ background: "var(--color-bg)" }}>
                   <textarea
                     value={customPrompt}
                     onChange={(e) => setCustomPrompt(e.target.value)}
-                    placeholder={"例如：重点关注学生对"借物喻人"写法的理解，列出每位同学是否正确运用了该手法，并给出针对性建议。\n\n留空则使用默认分析模板。"}
+                    placeholder={`例如：重点关注学生对「借物喻人」写法的理解，列出每位同学是否正确运用了该手法，并给出针对性建议。\n\n留空则使用默认分析模板。`}
                     rows={4}
                     className="w-full rounded-lg border p-3 text-xs resize-none outline-none transition-all"
                     style={{
                       borderColor: "var(--color-border)",
-                      background: "var(--color-bg)",
+                      background: "white",
                       color: "var(--color-text-primary)",
                       lineHeight: "1.6",
                     }}
@@ -560,7 +542,7 @@ function QuestionDetail({
                     <button
                       type="button"
                       onClick={() => setCustomPrompt("")}
-                      className="mt-1 text-xs hover:opacity-70 transition-opacity"
+                      className="text-xs hover:opacity-70 transition-opacity"
                       style={{ color: "var(--color-text-muted)" }}
                     >
                       清除，恢复默认模板
@@ -568,49 +550,80 @@ function QuestionDetail({
                   )}
                 </div>
               )}
+            </div>
 
+            {/* 按钮行 */}
+            <div className="flex gap-2">
+              {currentStatus === "active" && (
+                <button
+                  onClick={handleClose}
+                  disabled={closeStatus === "loading" || closeStatus === "done"}
+                  className="py-2.5 px-4 rounded-xl text-sm font-semibold border-2 transition-all duration-200 disabled:opacity-50 whitespace-nowrap"
+                  style={{
+                    borderColor: "var(--color-danger)",
+                    color: "var(--color-danger)",
+                    background: "var(--color-danger-bg)",
+                  }}
+                >
+                  {closeStatus === "loading" ? "结束中…" : closeStatus === "done" ? "✓ 已结束" : "结束问题"}
+                </button>
+              )}
+              {currentStatus === "closed" && (
+                <button
+                  onClick={handleReactivate}
+                  disabled={reactivateStatus === "loading"}
+                  className="py-2.5 px-4 rounded-xl text-sm font-semibold border-2 transition-all duration-200 disabled:opacity-50 whitespace-nowrap"
+                  style={{
+                    borderColor: "var(--color-active-border)",
+                    color: "var(--color-active)",
+                    background: "var(--color-active-bg)",
+                  }}
+                >
+                  {reactivateStatus === "loading" ? "激活中…" : "🔄 重新激活"}
+                </button>
+              )}
               <button
                 onClick={handleAnalyze}
                 disabled={analyzeStatus === "submitting" || analyzeStatus === "polling"}
-                className="w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-200 disabled:opacity-60"
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white transition-all duration-200 disabled:opacity-60"
                 style={{ background: "var(--color-teacher-accent)" }}
               >
-              {analyzeStatus === "submitting" ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  提交中…
-                </span>
-              ) : analyzeStatus === "polling" ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  AI 分析中…
-                </span>
-              ) : (
-                "✨ AI 分析"
-              )}
-            </button>
-            </div>
-            {currentStatus === "closed" && (
-              <button
-                onClick={handleDelete}
-                disabled={deleteStatus === "loading"}
-                className="py-2.5 px-4 rounded-xl text-sm font-semibold border-2 transition-all duration-200 disabled:opacity-50"
-                style={{
-                  borderColor: "var(--color-danger)",
-                  color: "var(--color-danger)",
-                  background: "var(--color-danger-bg)",
-                }}
-                title="删除该问题及所有回答"
-              >
-                {deleteStatus === "loading" ? "删除中…" : "🗑 删除"}
+                {analyzeStatus === "submitting" ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    提交中…
+                  </span>
+                ) : analyzeStatus === "polling" ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    AI 分析中…
+                  </span>
+                ) : (
+                  "✨ AI 分析"
+                )}
               </button>
-            )}
+              {currentStatus === "closed" && (
+                <button
+                  onClick={handleDelete}
+                  disabled={deleteStatus === "loading"}
+                  className="py-2.5 px-4 rounded-xl text-sm font-semibold border-2 transition-all duration-200 disabled:opacity-50 whitespace-nowrap"
+                  style={{
+                    borderColor: "var(--color-danger)",
+                    color: "var(--color-danger)",
+                    background: "var(--color-danger-bg)",
+                  }}
+                  title="删除该问题及所有回答"
+                >
+                  {deleteStatus === "loading" ? "删除中…" : "🗑 删除"}
+                </button>
+              )}
+            </div>
           </div>
 
           {/* AI 分析状态提示 */}
