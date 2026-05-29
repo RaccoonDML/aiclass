@@ -3,6 +3,9 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
 import { type Question, type Submission } from "@/lib/supabase";
 
 // ─── 分享弹窗 ────────────────────────────────────────────────
@@ -259,6 +262,8 @@ function QuestionDetail({
   const [currentStatus, setCurrentStatus] = useState(question.status);
   const [currentContent, setCurrentContent] = useState(question.content);
   const [showShare, setShowShare] = useState(false);
+  const [drawerWidth, setDrawerWidth] = useState(560); // 初始宽度 px
+  const isDragging = useRef(false);
 
   useEffect(() => {
     loadSubmissions();
@@ -451,6 +456,27 @@ function QuestionDetail({
     }
   }
 
+  function startDrag(e: React.MouseEvent) {
+    e.preventDefault();
+    isDragging.current = true;
+    const startX = e.clientX;
+    const startW = drawerWidth;
+
+    function onMove(ev: MouseEvent) {
+      if (!isDragging.current) return;
+      const delta = startX - ev.clientX;
+      const next = Math.min(Math.max(startW + delta, 320), window.innerWidth - 80);
+      setDrawerWidth(next);
+    }
+    function onUp() {
+      isDragging.current = false;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+
   return (
     <>
     <div
@@ -459,12 +485,23 @@ function QuestionDetail({
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className="ml-auto w-full max-w-xl h-full overflow-y-auto flex flex-col animate-slide-in"
+        className="ml-auto h-full overflow-y-auto flex flex-col animate-slide-in relative"
         style={{
+          width: drawerWidth,
+          minWidth: 320,
           background: "var(--color-surface)",
           boxShadow: "-20px 0 60px rgba(0,0,0,0.12)",
         }}
       >
+        {/* 左侧拖拽把手 */}
+        <div
+          onMouseDown={startDrag}
+          className="absolute left-0 top-0 h-full w-1.5 cursor-col-resize group z-20 hover:bg-blue-200 transition-colors"
+          style={{ background: "transparent" }}
+          title="拖动调整宽度"
+        >
+          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-10 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: "var(--color-teacher-accent)" }} />
+        </div>
         {/* 抽屉头部 */}
         <div
           className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 border-b"
@@ -768,9 +805,9 @@ function QuestionDetail({
                   重新分析
                 </button>
               </div>
-              <pre className="text-sm whitespace-pre-wrap leading-relaxed" style={{ color: "var(--color-text-primary)", fontFamily: "var(--font-body)" }}>
-                {analyzeResult}
-              </pre>
+              <div className="ai-result text-sm leading-relaxed" style={{ color: "var(--color-text-primary)", fontFamily: "var(--font-body)" }}>
+                <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>{analyzeResult}</ReactMarkdown>
+              </div>
             </div>
           )}
 

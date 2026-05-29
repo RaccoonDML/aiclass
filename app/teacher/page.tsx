@@ -1,6 +1,8 @@
 import { supabase, type Question } from "@/lib/supabase";
 import TeacherConsole from "./TeacherConsole";
 
+export const dynamic = "force-dynamic";
+
 async function getQuestions(): Promise<Question[]> {
   const { data, error } = await supabase
     .from("questions")
